@@ -1,0 +1,148 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AdmissionStatus {
+  Applied
+  Pending
+  Admitted
+  Rejected
+}
+
+enum StudentLifecycleStatus {
+  Active
+  Inactive
+}
+
+enum AdminRole {
+  ADMIN
+}
+
+enum ContactClassOfInterest {
+  Playway
+  Nursery
+  LKG
+  UKG
+}
+
+enum ContactNotificationStatus {
+  Pending
+  Sent
+  Failed
+}
+
+model Admin {
+  id            String            @id @default(uuid()) @db.Uuid
+  email         String            @unique @db.VarChar(320)
+  passwordHash  String            @db.Text
+  role          AdminRole         @default(ADMIN)
+  createdAt     DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime          @updatedAt @db.Timestamptz(3)
+  revisions     StudentRevision[]
+  refreshTokens RefreshToken[]
+
+  @@map("admins")
+}
+
+model Student {
+  id                       String                 @id @default(uuid()) @db.Uuid
+  currentRevisionId        String                 @db.Uuid
+  currentApplicationNumber String                 @unique @db.VarChar(100)
+  lifecycleStatus          StudentLifecycleStatus @default(Active)
+  createdAt                DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime               @updatedAt @db.Timestamptz(3)
+  revisions                StudentRevision[]      @relation("StudentRevisions")
+  currentRevision          StudentRevision?       @relation("StudentCurrentRevision", fields: [currentRevisionId, id, currentApplicationNumber], references: [id, studentId, applicationNumber], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([currentRevisionId, id, currentApplicationNumber])
+  @@index([lifecycleStatus, currentApplicationNumber])
+  @@map("students")
+}
+
+model StudentRevision {
+  id                           String            @id @default(uuid()) @db.Uuid
+  studentId                    String            @db.Uuid
+  revisionNumber               Int
+  basedOnRevisionId            String?           @db.Uuid
+  applicationNumber            String            @db.VarChar(100)
+  parentId                     String?           @db.Uuid
+  dateOfAdmission              DateTime?         @db.Date
+  admissionSoughtIn            String?           @db.VarChar(100)
+  class                        String?           @db.VarChar(100)
+  section                      String?           @db.VarChar(100)
+  rollNumber                   String?           @db.VarChar(100)
+  firstName                    String            @db.VarChar(200)
+  surname                      String?           @db.VarChar(200)
+  nameUsedAtHome               String?           @db.VarChar(200)
+  gender                       String?           @db.VarChar(100)
+  dateOfBirth                  DateTime?         @db.Date
+  languageSpokenAtHome         String?           @db.VarChar(200)
+  address                      String?           @db.Text
+  fatherName                   String?           @db.VarChar(300)
+  fatherEducationQualification String?           @db.VarChar(300)
+  fatherOccupation             String?           @db.VarChar(300)
+  fatherMobileNumber           String?           @db.VarChar(32)
+  motherName                   String?           @db.VarChar(300)
+  motherEducationQualification String?           @db.VarChar(300)
+  motherOccupation             String?           @db.VarChar(300)
+  motherMobileNumber           String?           @db.VarChar(32)
+  previousSchooling            Boolean?
+  previousSchoolingDetails     String?           @db.Text
+  toiletTrained                Boolean?
+  brothersCount                Int?
+  sistersCount                 Int?
+  photoLocator                 String?           @db.VarChar(1024)
+  status                       AdmissionStatus   @default(Applied)
+  createdOn                    DateTime          @default(now()) @db.Timestamptz(3)
+  createdByAdminId             String            @db.Uuid
+  student                      Student           @relation("StudentRevisions", fields: [studentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  currentFor                   Student?          @relation("StudentCurrentRevision")
+  basedOnRevision              StudentRevision?  @relation("RevisionLineage", fields: [basedOnRevisionId, studentId], references: [id, studentId], onDelete: Restrict, onUpdate: Restrict)
+  derivedRevisions             StudentRevision[] @relation("RevisionLineage")
+  createdByAdmin               Admin             @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([studentId, revisionNumber])
+  @@unique([id, studentId])
+  @@unique([id, studentId, applicationNumber])
+  @@index([studentId, createdOn])
+  @@index([createdByAdminId])
+  @@map("student_revisions")
+}
+
+model RefreshToken {
+  id                String        @id @default(uuid()) @db.Uuid
+  adminId           String        @db.Uuid
+  sessionId         String        @db.Uuid
+  tokenHash         String        @unique @db.VarChar(255)
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+  expiresAt         DateTime      @db.Timestamptz(3)
+  revokedAt         DateTime?     @db.Timestamptz(3)
+  replacedByTokenId String?       @unique @db.Uuid
+  admin             Admin         @relation(fields: [adminId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  replacedByToken   RefreshToken? @relation("RefreshTokenRotation", fields: [replacedByTokenId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  replacedToken     RefreshToken? @relation("RefreshTokenRotation")
+
+  @@index([adminId, expiresAt])
+  @@index([adminId, sessionId, revokedAt])
+  @@map("refresh_tokens")
+}
+
+model ContactEnquiry {
+  id                    String                    @id @default(uuid()) @db.Uuid
+  parentName            String                    @db.VarChar(100)
+  phoneNumber           String                    @db.VarChar(32)
+  classOfInterest       ContactClassOfInterest
+  message               String                    @db.VarChar(2000)
+  createdAt             DateTime                  @default(now()) @db.Timestamptz(3)
+  notificationStatus    ContactNotificationStatus @default(Pending)
+  notificationErrorCode String?                   @db.VarChar(100)
+
+  @@index([createdAt])
+  @@index([notificationStatus, createdAt])
+  @@map("contact_enquiries")
+}

@@ -1,0 +1,9 @@
+node_modules
+.DS_Store
+.env
+.env.*
+!.env.example
+apps/web/dist
+apps/web/.vite
+local-data/
+npm-debug.log*
